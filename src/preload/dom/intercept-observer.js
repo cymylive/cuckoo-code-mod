@@ -7,7 +7,7 @@ const { extractJsToolBlocks, BT } = require('./js-detector');
 const { tryParseToolCall } = require('./tool-parser');
 const { handleToolCall, handleJsToolScript } = require('./tool-executor');
 const { sendToolResultToChat, sendCombinedJsResultsToChat, sendMessageToChat } = require('./chat-input');
-const { setFabState, getFabState } = require('../overlay/ui');
+const { setFabState, getFabState, setStopped } = require('../overlay/ui');
 const { hasTool, toolNamesList } = require('../tool-names');
 const state = require('./state');
 
@@ -150,7 +150,14 @@ function startInterceptObserver() {
   // AI 开始生成回复：悬浮球切换为「AI 生成中」
   window.addEventListener('cuckoo-ai-start', () => {
     try {
-      if (state.stopped) return; // 已停止：不再进入生成态
+      // 检测到新一轮 AI 生成开始（用户手动发消息 或 程序发送）
+      // 若此前处于「已停止」状态，说明用户主动发起了新对话 → 自动恢复自动执行
+      if (state.stopped) {
+        state.stopped = false;
+        try { window.electronAPI.clearAbort(); } catch (_) {}
+        try { setStopped(false); } catch (_) {}
+        console.log('[Cuckoo Code][拦截] 检测到新对话开始，已恢复自动执行');
+      }
       setFabState('generating');
       if (generateTimeout) clearTimeout(generateTimeout);
       generateTimeout = setTimeout(() => {

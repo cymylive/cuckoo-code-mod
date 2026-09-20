@@ -69,6 +69,14 @@ mod 归档是基于 **0.5.3** 的完整文件快照，而目标项目是 **0.5.1
 | src/preload/dom/chat-input.js | 发消息清除停止态 + 延迟发送守卫 |
 | src/providers/deepseek.js / claude.js / chatgpt.js | 新增 findStopButton() |
 
+### 修复：手动发消息未恢复状态（2026-09-21）
+**问题**：右键停止后手动发消息，悬浮球仍显示「已停止」，未恢复实时对话状态。
+**原因**：清除 stopped 的逻辑只写在 chat-input.js 的 sendToChat()（程序自动发送路径），
+用户手动打字发送不经过它，状态永不恢复。
+**修复**：改为以 cuckoo-ai-start 事件（AI 开始生成，无论谁触发）作为恢复信号——
+intercept-observer.js 收到 cuckoo-ai-start 时，若 state.stopped 为真则清除并恢复自动执行。
+（cuckoo-ai-start 在每次 completion 请求发出瞬间触发，停止不会触发它，是可靠的"新一轮开始"信号。）
+
 ### 验证
 - 16 个改动文件 node --check 全通过
 - 测试套件 **246 tests / 246 pass / 0 fail**
