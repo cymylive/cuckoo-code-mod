@@ -3,6 +3,8 @@
 > **本项目是 [wangyongpeng90/cuckoo-code](https://github.com/wangyongpeng90/cuckoo-code) 的二次开发版（fork / secondary development），遵循 GPL-3.0-only 许可。**
 > 上游原作者与项目归属：Cuckoo Code Contributors — https://github.com/wangyongpeng90/cuckoo-code
 > 本分支（cymylive/cuckoo-code-mod）的改动与发行由 cymylive 维护。
+>
+> **本分支新增功能**：任务停止（面板「⏹ 停止」按钮 / 悬浮球右键，立即中断 AI 生成 + 工具执行 + 自动循环；发送任意消息即恢复）。详见 `MOD-INSTALL.md`。
 
 <p align="center">
   <a href="https://github.com/wangyongpeng90/cuckoo-code/releases/latest"><img src="https://img.shields.io/github/v/release/wangyongpeng90/cuckoo-code?style=flat-square&color=8b93ff" alt="Latest Release"></a>

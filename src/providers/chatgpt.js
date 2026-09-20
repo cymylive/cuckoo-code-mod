@@ -317,6 +317,25 @@ module.exports = {
     return null;
   },
 
+  // 查找可见的「停止生成」按钮（AI 正在输出时出现）
+  findStopButton() {
+    const selectors = [
+      'button[data-testid="stop-button"]',
+      'button[aria-label="Stop streaming"]',
+      'button[aria-label*="Stop"]',
+      'button[aria-label*="停止"]',
+      'button[aria-label*="停止生成"]',
+      'button:has(svg rect[x="6"])',
+    ];
+    for (const sel of selectors) {
+      try {
+        const btn = document.querySelector(sel);
+        if (this.isElementVisible(btn) && !btn.disabled) return btn;
+      } catch (_) {}
+    }
+    return null;
+  },
+
   // 提取当前用户信息文本
   // 优先从 localStorage 的 accountSwitchSessions 读取（稳定，不受 DOM 渲染影响）；
   // 失败再回退到侧边栏 DOM 提取。

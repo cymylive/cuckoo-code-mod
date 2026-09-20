@@ -17,4 +17,6 @@ module.exports = {
   serverTokenUsage: null,
   // 最近一次 AI 回复的消息 id（{ requestMessageId, responseMessageId }）
   lastResponseMsgIds: null,
+  // 用户是否点击了「停止」：为 true 时丢弃后续 AI 回复与工具结果，不再自动继续
+  stopped: false,
 };

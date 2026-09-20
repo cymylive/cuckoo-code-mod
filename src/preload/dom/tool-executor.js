@@ -4,6 +4,7 @@
  */
 const { showToast, setTaskStatus, addHistory, truncate, flashBadge } = require('../overlay/ui');
 const { sendToolResultToChat } = require('./chat-input');
+const state = require('./state');
 
 // 是否正在执行命令或工具
 let isExecuting = false;
@@ -36,6 +37,11 @@ function notifyJsScriptDetected(code) {
  * @returns {Promise<{code: string, result: object}>}
  */
 async function handleJsToolScript(code) {
+  // 已停止：不再执行新脚本
+  if (state.stopped) {
+    console.log('[Cuckoo Code] 已停止，跳过 JS 脚本执行');
+    return { code, result: { success: false, error: '任务已被用户停止' } };
+  }
   isExecuting = true;
   notifyJsScriptDetected(code);
   setTaskStatus(true);
@@ -103,6 +109,11 @@ async function handleJsToolScript(code) {
  */
 async function handleToolCall(toolCall) {
   const { toolName, params, callId } = toolCall;
+  // 已停止：不再执行新工具
+  if (state.stopped) {
+    console.log('[Cuckoo Code] 已停止，跳过工具执行: ' + toolName);
+    return;
+  }
   console.log('[Cuckoo Code] 执行工具: ' + toolName, params);
 
   isExecuting = true;
@@ -144,7 +155,12 @@ async function handleToolCall(toolCall) {
       timestamp: Date.now(),
     });
 
-    sendToolResultToChat(toolCall, result);
+    // 已停止：不回传结果，避免 AI 收到后继续自动执行
+    if (!state.stopped) {
+      sendToolResultToChat(toolCall, result);
+    } else {
+      console.log('[Cuckoo Code] 已停止，丢弃工具结果回传');
+    }
   } catch (err) {
     console.error('[Cuckoo Code] 工具执行异常:', err);
     const resultSection = document.getElementById('cuckoo-result-section');
@@ -156,7 +172,9 @@ async function handleToolCall(toolCall) {
       resultStatus.className = 'cuckoo-result-status error';
     }
     if (resultOutput) resultOutput.textContent = err.message || String(err);
-    sendToolResultToChat(toolCall, { success: false, error: '系统异常: ' + (err.message || String(err)) });
+    if (!state.stopped) {
+      sendToolResultToChat(toolCall, { success: false, error: '系统异常: ' + (err.message || String(err)) });
+    }
   } finally {
     isExecuting = false;
     setTaskStatus(false);

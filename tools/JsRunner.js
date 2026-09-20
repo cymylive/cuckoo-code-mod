@@ -14,6 +14,7 @@ const { exec } = require('child_process');
 const path = require('path');
 const { DANGEROUS_CMDS } = require('./BashTool');
 const { decodeOutput, normalizeCommand } = require('./decodeOutput');
+const activeProcesses = require('./active-processes');
 
 // 同步执行超时（vm timeout，覆盖无 await 的死循环）
 const SYNC_TIMEOUT = 30 * 1000;
@@ -201,7 +202,8 @@ function runBash(args, projectDir) {
   const cwd = resolveDir(args.workdir || args.cwd, projectDir);
 
   return new Promise((resolve) => {
-    exec(command, { cwd, timeout, maxBuffer: 1024 * 1024, windowsHide: true, encoding: 'buffer' }, (error, stdout, stderr) => {
+    const child = exec(command, { cwd, timeout, maxBuffer: 1024 * 1024, windowsHide: true, encoding: 'buffer' }, (error, stdout, stderr) => {
+      activeProcesses.unregister(child);
       const out = decodeOutput(stdout);
       const err = decodeOutput(stderr);
 
@@ -232,6 +234,7 @@ function runBash(args, projectDir) {
       // 非零退出也正常返回（success:true），模型看到标记自行判断
       resolve({ success: true, data: body });
     });
+    activeProcesses.register(child);
   });
 }
 
@@ -268,6 +271,10 @@ class JsRunner {
     if (!code || typeof code !== 'string' || !code.trim()) {
       return { success: false, error: '无效的 JS 代码' };
     }
+    // 已停止状态：直接拒绝执行新脚本
+    if (activeProcesses.isAborted()) {
+      return { success: false, error: '任务已被用户停止' };
+    }
 
     const startTime = Date.now();
     const deadlineMs = RUN_DEADLINE;
@@ -276,6 +283,10 @@ class JsRunner {
     // 注意：该函数绝不向沙箱抛出宿主对象（错误一律包装成 { success:false, error } 结果），
     // 避免沙箱内出现宿主 realm 的 Error / Function 逃逸通道。
     const hostBridge = async (op, argsJson) => {
+      // 用户点「停止」后，沙箱代码的下一次工具调用直接失败，从而中断整个脚本
+      if (activeProcesses.isAborted()) {
+        return JSON.stringify({ success: false, error: '任务已被用户停止' });
+      }
       if (Date.now() - startTime > deadlineMs) {
         return JSON.stringify({ success: false, error: 'JS 脚本执行超时（' + Math.round(deadlineMs / 1000) + ' 秒）' });
       }

@@ -2,6 +2,7 @@ const { Tool, ToolResult } = require('./ToolRegistry');
 const { execFile } = require('child_process');
 const path = require('path');
 const { decodeOutput } = require('./decodeOutput');
+const activeProcesses = require('./active-processes');
 
 // PowerShell 危险命令列表（额外覆盖 PowerShell 特有危险操作）
 const DANGEROUS_PWSH_CMDS = [
@@ -102,11 +103,12 @@ class PwshTool extends Tool {
       console.log('[PwshTool] 执行命令: ' + trimmed + ', cwd=' + workDir);
 
       return await new Promise((resolve) => {
-        execFile(
+        const child = execFile(
           'powershell',
           ['-NoProfile', '-Command', trimmed],
           { cwd: workDir, timeout, maxBuffer: 1024 * 1024, windowsHide: true, encoding: 'buffer' },
           (error, stdout, stderr) => {
+            activeProcesses.unregister(child);
             const out = decodeOutput(stdout);
             const err = decodeOutput(stderr);
 
@@ -137,6 +139,7 @@ class PwshTool extends Tool {
             resolve(ToolResult.success(body));
           }
         );
+        activeProcesses.register(child);
       });
     } catch (err) {
       return ToolResult.error('命令执行异常: ' + err.message);

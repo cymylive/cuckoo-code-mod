@@ -275,6 +275,25 @@ module.exports = {
     return null;
   },
 
+  // 查找可见的「停止生成」按钮（AI 正在输出时出现）
+  findStopButton() {
+    const selectors = [
+      'button[aria-label="Stop response"]',
+      'button[aria-label*="Stop"]',
+      'button[aria-label*="stop"]',
+      'button[aria-label*="停止"]',
+      'button[data-testid="stop-button"]',
+      'button[data-testid*="stop"]',
+    ];
+    for (const sel of selectors) {
+      try {
+        const btn = document.querySelector(sel);
+        if (this.isElementVisible(btn) && !btn.disabled) return btn;
+      } catch (_) {}
+    }
+    return null;
+  },
+
   // 提取当前用户信息文本（左下角账号名）
   extractUserInfo() {
     const el = document.querySelector('.df-user-menu-btn span.whitespace-nowrap.text-secondary');

@@ -61,6 +61,11 @@ async function executeJsBlocksWithRetry(blocks) {
 async function processInterceptedResponse(text, force) {
   const raw = (text || '').trim();
   if (!raw) return;
+  // 用户已点停止：丢弃本次回复，不执行任何工具、不回传结果
+  if (state.stopped) {
+    console.log('[Cuckoo Code][拦截] 已停止，丢弃本次回复');
+    return;
+  }
   if (!force && raw === lastProcessedText) return;
   lastProcessedText = raw;
 
@@ -72,7 +77,13 @@ async function processInterceptedResponse(text, force) {
     console.log('[Cuckoo Code][拦截] 检测到 JS 工具代码块（' + jsBlocks.length + ' 个），开始执行');
     xmlHintCount = 0;
     const results = await executeJsBlocksWithRetry(jsBlocks);
-    if (results.length > 0) sendCombinedJsResultsToChat(results);
+    if (results.length > 0) {
+      if (state.stopped) {
+        console.log('[Cuckoo Code][拦截] 已停止，丢弃 JS 结果回传');
+      } else {
+        sendCombinedJsResultsToChat(results);
+      }
+    }
     return;
   }
 
@@ -139,6 +150,7 @@ function startInterceptObserver() {
   // AI 开始生成回复：悬浮球切换为「AI 生成中」
   window.addEventListener('cuckoo-ai-start', () => {
     try {
+      if (state.stopped) return; // 已停止：不再进入生成态
       setFabState('generating');
       if (generateTimeout) clearTimeout(generateTimeout);
       generateTimeout = setTimeout(() => {
@@ -153,6 +165,7 @@ function startInterceptObserver() {
     try {
       const detail = ev && ev.detail;
       if (!detail || !detail.finished) return;
+      if (state.stopped) return; // 已停止：忽略本次完成事件
       // 回复完成：清除「生成中」状态与兜底定时器（随后工具执行会再切到「执行中」）
       if (generateTimeout) { clearTimeout(generateTimeout); generateTimeout = null; }
       if (getFabState() === 'generating') setFabState('idle');
@@ -183,4 +196,10 @@ function getLastInterceptedText() {
   return lastInterceptedText;
 }
 
-module.exports = { startInterceptObserver, processInterceptedResponse, getLastInterceptedText, onInterceptedResponse };
+/** 清除「生成中」兜底定时器并复位状态（停止任务时调用） */
+function resetGenerating() {
+  if (generateTimeout) { clearTimeout(generateTimeout); generateTimeout = null; }
+  if (getFabState() === 'generating') setFabState('idle');
+}
+
+module.exports = { startInterceptObserver, processInterceptedResponse, getLastInterceptedText, onInterceptedResponse, resetGenerating };

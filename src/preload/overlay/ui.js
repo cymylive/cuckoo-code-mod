@@ -185,20 +185,51 @@ function setFabState(next) {
   const badge = document.getElementById('cuckoo-status-badge');
   const label = document.getElementById('cuckoo-fab-label');
   if (!badge) return;
-  badge.classList.remove('cuckoo-state-idle', 'cuckoo-state-generating', 'cuckoo-state-executing');
+  badge.classList.remove('cuckoo-state-idle', 'cuckoo-state-generating', 'cuckoo-state-executing', 'cuckoo-state-stopped');
   badge.classList.add('cuckoo-state-' + fabState);
-  const text = fabState === 'generating' ? 'AI 生成中'
-    : fabState === 'executing' ? '执行中' : '';
+  const text = fabState === 'generating' ? 'AI 生成中（右键停止）'
+    : fabState === 'executing' ? '执行中（右键停止）'
+    : fabState === 'stopped' ? '已停止（发消息恢复）' : '';
   if (label) {
     label.textContent = text;
     label.classList.toggle('cuckoo-hidden', !text);
   }
   badge.title = text ? ('Cuckoo Code - ' + text) : 'Cuckoo Code';
+  // 生成中/执行中显示「停止」按钮；空闲/已停止隐藏
+  const stopBtn = document.getElementById('cuckoo-btn-stop');
+  if (stopBtn) {
+    stopBtn.classList.toggle('cuckoo-hidden', !(fabState === 'generating' || fabState === 'executing'));
+  }
 }
 
 /** 获取当前悬浮球状态 */
 function getFabState() {
   return fabState;
+}
+
+/**
+ * 设置「停止」状态：更新悬浮球为已停止、同步停止按钮显隐。
+ * @param {boolean} stopped
+ */
+function setStopped(stopped) {
+  const badge = document.getElementById('cuckoo-status-badge');
+  const stopBtn = document.getElementById('cuckoo-btn-stop');
+  const resumable = document.getElementById('cuckoo-stopped-hint');
+  if (badge) {
+    badge.classList.toggle('cuckoo-state-stopped', !!stopped);
+  }
+  if (stopBtn) stopBtn.classList.toggle('cuckoo-hidden', !!stopped);
+  if (resumable) resumable.classList.toggle('cuckoo-hidden', !stopped);
+  if (stopped) {
+    setFabState('stopped');
+  } else if (fabState === 'stopped') {
+    setFabState('idle');
+  }
+}
+
+/** 是否处于已停止状态 */
+function isStopped() {
+  return fabState === 'stopped';
 }
 
 /**
@@ -215,6 +246,11 @@ function setTaskStatus(running) {
     setFabState('executing');
   } else if (fabState === 'executing') {
     setFabState('idle');
+  }
+  // 已停止状态优先，不被执行结束覆盖
+  if (fabState === 'idle' && document.getElementById('cuckoo-status-badge') &&
+      document.getElementById('cuckoo-status-badge').classList.contains('cuckoo-state-stopped')) {
+    setFabState('stopped');
   }
 }
 
@@ -418,6 +454,8 @@ module.exports = {
   setTaskStatus,
   setFabState,
   getFabState,
+  setStopped,
+  isStopped,
   showOverlay,
   hideOverlay,
   displayCommand,

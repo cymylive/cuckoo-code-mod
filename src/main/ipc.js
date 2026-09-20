@@ -13,6 +13,7 @@ const { isDangerous } = require('./dangerous-commands');
 const memoryStore = require('./memory-store');
 const skillStore = require('./skill-store');
 const { decodeOutput, normalizeCommand } = require('../../tools/decodeOutput');
+const activeProcesses = require('../../tools/active-processes');
 
 function registerIpcHandlers() {
   // 初始化项目
@@ -152,6 +153,20 @@ function registerIpcHandlers() {
     } catch (err) {
       return { success: false, error: err.message };
     }
+  });
+
+  // 停止当前任务：kill 所有活动子进程 + 置中止标志
+  // 之后的工具/JS 调用会被 JsRunner/BashTool 检测到标志并拒绝执行
+  ipcMain.handle('abort-execution', async () => {
+    const killed = activeProcesses.killAll();
+    activeProcesses.markAborted();
+    return { success: true, killed };
+  });
+
+  // 用户下次发消息时清除中止标志，恢复正常执行
+  ipcMain.handle('clear-abort', async () => {
+    activeProcesses.clearAborted();
+    return { success: true };
   });
 
   // 执行 JS 脚本

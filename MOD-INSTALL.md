@@ -34,6 +34,46 @@ mod 归档是基于 **0.5.3** 的完整文件快照，而目标项目是 **0.5.1
 | 11 | 设置面板滚动修复 | 修复 |
 | 12 | 4 个提示词模板补 {{MEMORY_SECTION}} / {{SKILL_SECTION}} | 修复 |
 
+## 二·补、追加功能：停止任务（2026-09-21 新增）
+
+### 需求
+对话任务执行过程中无法中断，需要一个「停止」按钮，点击后立即停止。
+
+### 功能
+| 入口 | 行为 |
+|------|------|
+| 面板「⏹ 停止」按钮 | 生成中/执行中时出现，点击即停 |
+| 悬浮球右键 | 任意时刻右键悬浮球即停 |
+| 恢复 | 发送任意消息自动清除停止状态，恢复正常 |
+
+### 停止时发生什么（三层全断）
+1. **AI 生成层**：调用 provider 的 findStopButton() 点击页面原生「停止生成」
+2. **工具执行层**：主进程 killAll() 杀掉所有活动子进程（taskkill /T 杀进程树）
+3. **自动循环层**：置 stopped 标志，之后收到的 AI 回复、工具结果一律丢弃，不再回传触发下一轮
+
+### 改动文件
+| 文件 | 改动 |
+|------|------|
+| tools/active-processes.js | **新增**：活动子进程跟踪 + 全局中止标志 |
+| tools/BashTool.js | 注册/注销子进程 |
+| tools/PwshTool.js | 注册/注销子进程 |
+| tools/JsRunner.js | 注册子进程 + hostBridge 检测中止 + run 入口守卫 |
+| src/main/ipc.js | 新增 abort-execution / clear-abort handler |
+| src/preload/api.js | 暴露 stopExecution / clearAbort |
+| src/preload/dom/state.js | 加 stopped 标志 |
+| src/preload/overlay/ui.js | setStopped/isStopped + 停止按钮显隐联动 |
+| src/preload/overlay/template.js | 停止按钮 + 已停止提示 + 悬浮球 stopped 态 CSS |
+| src/preload/overlay/events.js | 停止按钮绑定 + 悬浮球右键 + stopTask/clearStopped |
+| src/preload/dom/intercept-observer.js | 停止后丢弃回复、忽略完成事件、resetGenerating |
+| src/preload/dom/tool-executor.js | 停止后不执行新工具、不回传结果 |
+| src/preload/dom/chat-input.js | 发消息清除停止态 + 延迟发送守卫 |
+| src/providers/deepseek.js / claude.js / chatgpt.js | 新增 findStopButton() |
+
+### 验证
+- 16 个改动文件 node --check 全通过
+- 测试套件 **246 tests / 246 pass / 0 fail**
+- 集成验证：正常执行→中止拒绝→沙箱内调用拦截→恢复执行，全部符合预期
+
 ## 三、文件清单
 
 ### 新增文件（9 个）

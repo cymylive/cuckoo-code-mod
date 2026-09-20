@@ -3,7 +3,7 @@
  * 由原 preload.js 拆分而来，逻辑保持不变。
  */
 const state = require('../dom/state');
-const { hideOverlay, showOverlay, renderHistory, commandHistory, showToast, showConfirmDialog, hideFirstTimeDialog } = require('./ui');
+const { hideOverlay, showOverlay, renderHistory, commandHistory, showToast, showConfirmDialog, hideFirstTimeDialog, setStopped } = require('./ui');
 const { handleInitProject, renderSessions } = require('../dom/session-list');
 const { sendToChat } = require('../dom/chat-input');
 const { runCompaction, checkPendingInit } = require('../dom/compaction');
@@ -109,6 +109,44 @@ function saveAutoInjectSetting() {
   try {
     localStorage.setItem('cuckoo-auto-inject', el && el.checked ? '1' : '0');
   } catch (_) {}
+}
+
+/**
+ * 停止当前任务：
+ *   1) 通知主进程 kill 所有活动子进程并置中止标志
+ *   2) 尝试点击页面自带的「停止生成」按钮，中断 AI 输出
+ *   3) 置本地 stopped 标志，丢弃后续 AI 回复与工具结果
+ */
+async function stopTask(silent) {
+  // 先置本地标志，避免停止过程中又有回复进入处理
+  state.stopped = true;
+  try { await window.electronAPI.stopExecution(); } catch (_) {}
+  // 点击页面原生「停止生成」按钮（各平台选择器不同）
+  try {
+    const { getProviderByUrl } = require('../../providers');
+    const provider = getProviderByUrl(window.location.href);
+    if (provider && typeof provider.findStopButton === 'function') {
+      const btn = provider.findStopButton();
+      if (btn) btn.click();
+    }
+  } catch (_) {}
+  // 清除生成兜底定时器与生成态
+  try {
+    const io = require('../dom/intercept-observer');
+    if (io.resetGenerating) io.resetGenerating();
+  } catch (_) {}
+  setStopped(true);
+  if (!silent) showToast('已停止。发送任意消息即可恢复自动执行', 3000);
+}
+
+/**
+ * 清除停止状态（用户下次发消息时调用）
+ */
+async function clearStopped() {
+  if (!state.stopped) return;
+  state.stopped = false;
+  try { await window.electronAPI.clearAbort(); } catch (_) {}
+  setStopped(false);
 }
 
 /**
@@ -478,6 +516,10 @@ function bindEvents() {
   const manualParseBtn = document.getElementById('cuckoo-btn-manual-parse');
   manualParseBtn?.addEventListener('click', handleManualParseDispatch);
 
+  // 停止按钮
+  const stopBtn = document.getElementById('cuckoo-btn-stop');
+  stopBtn?.addEventListener('click', () => { stopTask(false); });
+
   // 窗口管理按钮：打开浮动管理面板
   const windowManagerBtn = document.getElementById('cuckoo-btn-window-manager');
   windowManagerBtn?.addEventListener('click', () => {
@@ -668,6 +710,11 @@ function bindEvents() {
   // 悬浮球：可拖动 + 点击切换面板显隐
   const statusBadge = document.getElementById('cuckoo-status-badge');
   if (statusBadge) makeFabDraggable(statusBadge);
+  // 悬浮球右键：停止当前任务
+  statusBadge?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    stopTask(false);
+  });
   statusBadge?.addEventListener('click', () => {
     const overlay = document.getElementById('cuckoo-overlay');
     if (!overlay) return;
@@ -728,3 +775,5 @@ function bindEvents() {
 }
 
 module.exports = bindEvents;
+module.exports.stopTask = stopTask;
+module.exports.clearStopped = clearStopped;

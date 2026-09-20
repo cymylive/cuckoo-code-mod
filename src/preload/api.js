@@ -32,6 +32,12 @@ let electronAPI = {
   simulateMouse: (action, x, y) => {
     return ipcRenderer.invoke('simulate-mouse', { action, x, y });
   },
+  stopExecution: () => {
+    return ipcRenderer.invoke('abort-execution');
+  },
+  clearAbort: () => {
+    return ipcRenderer.invoke('clear-abort');
+  },
   listSessions: () => {
     return ipcRenderer.invoke('list-sessions');
   },

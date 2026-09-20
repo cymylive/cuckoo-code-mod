@@ -2,6 +2,7 @@ const { Tool, ToolResult } = require('./ToolRegistry');
 const { exec } = require('child_process');
 const path = require('path');
 const { decodeOutput, normalizeCommand } = require('./decodeOutput');
+const activeProcesses = require('./active-processes');
 
 // 危险命令列表（保持不变）
 const DANGEROUS_CMDS = [
@@ -96,10 +97,11 @@ class BashTool extends Tool {
       console.log('[BashTool] 执行命令: ' + trimmed + ', cwd=' + workDir);
 
       return await new Promise((resolve) => {
-        exec(
+        const child = exec(
           trimmed,
           { cwd: workDir, timeout, maxBuffer: 1024 * 1024, windowsHide: true, encoding: 'buffer' },
           (error, stdout, stderr) => {
+            activeProcesses.unregister(child);
             const out = decodeOutput(stdout);
             const err = decodeOutput(stderr);
 
@@ -130,6 +132,7 @@ class BashTool extends Tool {
             resolve(ToolResult.success(body));
           }
         );
+        activeProcesses.register(child);
       });
     } catch (err) {
       return ToolResult.error('命令执行异常: ' + err.message);

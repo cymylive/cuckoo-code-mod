@@ -80,6 +80,15 @@ async function setInputContent(input, msg) {
  * @returns {boolean} 是否成功
  */
 async function sendToChat(msg, tag, fixedDelay, afterSent) {
+  // 用户主动发消息：清除「已停止」状态，恢复正常自动执行
+  if (state.stopped) {
+    state.stopped = false;
+    try { window.electronAPI.clearAbort(); } catch (_) {}
+    try {
+      const { setStopped } = require('../overlay/ui');
+      if (setStopped) setStopped(false);
+    } catch (_) {}
+  }
   const input = findInputArea();
   if (!input) {
     console.log('[Cuckoo Code] 找不到输入框，无法发送消息');
@@ -91,6 +100,11 @@ async function sendToChat(msg, tag, fixedDelay, afterSent) {
   const sendDelay = fixedDelay !== undefined ? fixedDelay : randomDelay();
   console.log('[Cuckoo Code] 消息已填入输入框，等待 ' + sendDelay + 'ms 后发送...');
   setTimeout(function() {
+    // 延迟期间用户点了停止：取消本次发送
+    if (state.stopped) {
+      console.log('[Cuckoo Code] 已停止，取消本次延迟发送');
+      return;
+    }
     console.log('[Cuckoo Code] 等待结束，开始触发发送');
     triggerSend(input);
     console.log('[Cuckoo Code] 已触发发送, ' + (tag || '') + ', 长度=' + msg.length);
@@ -208,6 +222,11 @@ async function sendInitialPromptToInput() {
   const sendDelay = randomDelay();
   console.log('[Cuckoo Code] 初始提示已填入，随机等待 ' + sendDelay + 'ms 后发送...');
   setTimeout(function() {
+    if (state.stopped) {
+      console.log('[Cuckoo Code] 已停止，取消初始提示发送');
+      state.pendingInitialPrompt = false;
+      return;
+    }
     console.log('[Cuckoo Code] 等待结束，开始发送初始提示');
     triggerSend(input);
     state.pendingInitialPrompt = false;
